@@ -46,6 +46,7 @@ bool isVert(int);
 #define NO_INDEX         -1
 #define NO_DISTANCE      -1
 #define COMMENT_CHAR     '#'
+#define SIMILARITY_THRESHOLD  0.05
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -64,6 +65,8 @@ vector <int> ClosestVert_dist;   // for NoVert images, how many indices away is 
 set <int> Bad_idx_set;           // which images are bad
 set <int> Vert_idx_set;          // which images have edge vertex info
 set <int> NoVert_idx_set;        // which images do NOT have edge vertex info (Vert U NoVert = all images)
+
+set <int> FilteredVert_idx_set;  // vert images that pass various tests
 
 bool do_random = false;
 bool do_verts = false;
@@ -89,6 +92,67 @@ string current_imname;
 
 int max_closest_vert_dist;
 int next_nonvert_idx;
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+
+// smaller numbers -> MORE similar
+
+float image_similarity(Mat & im1, Mat & im2)
+{
+// Calculate the L2 relative error between images
+  double errorL2 = norm(im1, im2, CV_L2 );
+
+  // Convert to a reasonable scale, since L2 error is summed across all pixels of the image
+  double similarity = errorL2 / (double) ( im1.rows * im2.cols );
+
+  return similarity;
+}
+
+//----------------------------------------------------------------------------
+
+void filter_out_overly_similar_images()
+{
+  Mat im1, im2;
+  float sim;
+  set<int>::iterator iter, iter_next;
+  
+  FilteredVert_idx_set.clear();
+
+  for (iter = Vert_idx_set.begin(); iter != Vert_idx_set.end(); iter = iter_next) {
+
+    im1 = imread(dir_image_filename[*iter].c_str());
+    //    printf("%i\n", *iter);
+
+    FilteredVert_idx_set.insert(*iter);
+
+    iter_next = iter;
+    iter_next++;
+
+    // find next image that is dissimilar enough
+
+    while (iter_next != Vert_idx_set.end()) {
+
+      im2 = imread(dir_image_filename[*iter_next].c_str());
+
+      sim = image_similarity(im1, im2);
+
+      if (sim < SIMILARITY_THRESHOLD) {
+	printf("skipping %i [%.3f with %i]\n", *iter_next, sim, *iter);
+	//	printf("BAD: %i, %i: %.3f\n", *iter, *iter_next, sim);
+      }
+      else {
+	//	printf("GOOD: %i, %i: %.3f\n", *iter, *iter_next, sim);
+	break;
+      }
+
+      iter_next++;
+    }
+  }
+
+  printf("%i after (%i before)\n", (int) FilteredVert_idx_set.size(), (int) Vert_idx_set.size());
+ 
+}
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -355,6 +419,14 @@ void onKeyPress(char c)
 
     saveVert();   // for speed
     set_current_index(next_nonvert_idx);
+
+  }
+
+  // filter out overly-similar images
+
+  else if (c == 'F') {
+
+    filter_out_overly_similar_images();
 
   }
 
