@@ -93,6 +93,15 @@ string current_imname;
 int max_closest_vert_dist;
 int next_nonvert_idx;
 
+bool do_show_crop_rect = false;
+
+int output_crop_top_y = 25;
+int output_crop_height = 225;   // 150
+int output_crop_width = 450;  // 375
+
+int output_width = 150;
+int output_height = 75;
+
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
@@ -496,6 +505,11 @@ void onKeyPress(char c)
     }   
   }
   
+  // toggle showing crop rectangle
+
+  else if (c == 'c') 
+    do_show_crop_rect = !do_show_crop_rect;
+
   // toggle overlay
   
   else if (c == 'o') 
@@ -614,6 +628,23 @@ void draw_overlay()
       putText(draw_im, str, Point(5, 315), FONT_HERSHEY_SIMPLEX, 1.5 * fontScale, Scalar(0, 0, 255), 1, 8);
     }
 
+    // show crop rectangle:
+
+    if (do_show_crop_rect) {
+
+      int center_x = draw_im.cols / 2;
+      int xl = center_x - output_crop_width/2;
+      int xr = center_x + output_crop_width/2;
+      int yt = output_crop_top_y;
+      int yb = output_crop_top_y + output_crop_height;
+
+      rectangle(draw_im,  
+		Point(xl, yt),
+		Point(xr, yb),
+		Scalar(255, 255, 255), 2);
+      
+    }
+
     // are we in "random next image" mode?
 
     if (do_random) 
@@ -641,7 +672,6 @@ void draw_overlay()
     else if (vert_current_index) 
       setChannel(draw_im, 0, 200);
    
-
     // horizontal lines for trail edge rows
 
     for (int i = 0; i < trailEdgeRow.size(); i++) 
