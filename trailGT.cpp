@@ -67,6 +67,7 @@ set <int> Vert_idx_set;          // which images have edge vertex info
 set <int> NoVert_idx_set;        // which images do NOT have edge vertex info (Vert U NoVert = all images)
 
 set <int> FilteredVert_idx_set;  // vert images that pass various tests
+set <int> resized_set;
 
 bool do_random = false;
 bool do_verts = false;
@@ -162,6 +163,40 @@ void filter_out_overly_similar_images()
   printf("%i after (%i before)\n", (int) FilteredVert_idx_set.size(), (int) Vert_idx_set.size());
  
 }
+
+void draw_training_images()
+{
+    set<int>::iterator iter, iter_next;
+    Mat filtered_im;
+    int c;
+    Mat crop_im;
+    Mat output_im(output_height,output_width,CV_8UC3);
+    
+    int output_im_idx;
+    
+    
+    for (iter = FilteredVert_idx_set.begin(); iter != FilteredVert_idx_set.end(); iter = iter_next)
+    {
+        filtered_im = imread(dir_image_filename[*iter].c_str());
+        int x_left = filtered_im.cols / 2 - (output_crop_width/2);
+        filtered_im(cv::Rect(x_left,output_crop_top_y,output_crop_width,output_crop_height)).copyTo(crop_im);
+        imwrite(dir_image_filename[*iter], crop_im);
+        resize(crop_im, output_im, output_im.size(), 0, 0, INTER_LINEAR);
+        imwrite(dir_image_filename[*iter], output_im);
+        resized_set.insert(*iter);
+        
+        //imshow("crop", crop_im);
+        //imshow("output", output_im);
+        iter_next = iter;
+        iter_next++;
+
+
+        c = waitKey(5);
+    
+    }
+
+}
+
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
