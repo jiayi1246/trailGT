@@ -5,11 +5,19 @@
 #include <set>
 #include <fstream>
 #include <string>
+#include<sstream>
+#include<stdlib.h>
+#include<math.h>
+
 
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
 
 #include "dirent.h"
+#include <time.h>
+#include <sys/stat.h>
+
+
 
 #include <unistd.h>
 #include <sys/times.h>
@@ -47,6 +55,8 @@ bool isVert(int);
 #define NO_DISTANCE      -1
 #define COMMENT_CHAR     '#'
 #define SIMILARITY_THRESHOLD  0.05
+#define MAX_DATE 12
+
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -55,11 +65,15 @@ vector <string> dir_image_filename;  // full-path image filenames
  
 Mat current_im, draw_im;
 
+
 vector <int> Random_idx;         // R[i] holds random index
 vector <int> Nonrandom_idx;      // R[N[i]] = i
 vector < vector <Point> > Vert;  // actual trail vertices for each image 
 
+
 vector <int> ClosestVert_dist;   // for NoVert images, how many indices away is the *nearest* Vert image?
+vector<int> compression_params;
+
                                  // max of this is "most isolated"
 
 set <int> Bad_idx_set;           // which images are bad
@@ -67,7 +81,8 @@ set <int> Vert_idx_set;          // which images have edge vertex info
 set <int> NoVert_idx_set;        // which images do NOT have edge vertex info (Vert U NoVert = all images)
 
 set <int> FilteredVert_idx_set;  // vert images that pass various tests
-set <int> resized_set;
+set<int> resized_set;
+
 
 bool do_random = false;
 bool do_verts = false;
@@ -102,6 +117,10 @@ int output_crop_width = 450;  // 375
 
 int output_width = 150;
 int output_height = 75;
+
+Mat crop_im;
+Mat filtered_im;
+Mat output_im(output_height,output_width,CV_8UC3);
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -150,6 +169,8 @@ void filter_out_overly_similar_images()
       if (sim < SIMILARITY_THRESHOLD) {
 	printf("skipping %i [%.3f with %i]\n", *iter_next, sim, *iter);
 	//	printf("BAD: %i, %i: %.3f\n", *iter, *iter_next, sim);
+
+
       }
       else {
 	//	printf("GOOD: %i, %i: %.3f\n", *iter, *iter_next, sim);
@@ -160,42 +181,138 @@ void filter_out_overly_similar_images()
     }
   }
 
+// put this in a different function which is called after filtered_*()
+// don't write a file called filtered.txt -- just output the images
+// call saveTrainingVert()
+
+
   printf("%i after (%i before)\n", (int) FilteredVert_idx_set.size(), (int) Vert_idx_set.size());
  
 }
+//----------------------------------------------------------------------------------
 
+std::string get_date(void)
+{
+    time_t now = time(0);
+    char buf[200];
+    struct tm  tstruct;
+    tstruct = *localtime(&now);
+
+    if (now != -1)
+    {
+        strftime(buf, sizeof(buf), "%d_%m_%Y.%X", &tstruct);
+    }
+    
+    return buf;
+}
+
+//-----------------------------------------------------------------------------------------------
 void draw_training_images()
 {
     set<int>::iterator iter, iter_next;
-    Mat filtered_im;
-    int c;
-    Mat crop_im;
-    Mat output_im(output_height,output_width,CV_8UC3);
+    //Mat filtered_im;
+    //int c;
+    //Mat crop_im;
+    //Mat output_im(output_height,output_width,CV_8UC3);
     
-    int output_im_idx;
+    //int output_im_idx;
+    string folderName = get_date().c_str();
+    string folderCreateCommand = "mkdir " + folderName;
+    system(folderCreateCommand.c_str());
+    //std::ofstream o(folderName+"training.txt");
     
-    
+    int new_idx = 0;
     for (iter = FilteredVert_idx_set.begin(); iter != FilteredVert_idx_set.end(); iter = iter_next)
+
     {
+//cout<<"test images"<<endl;
         filtered_im = imread(dir_image_filename[*iter].c_str());
+
         int x_left = filtered_im.cols / 2 - (output_crop_width/2);
         filtered_im(cv::Rect(x_left,output_crop_top_y,output_crop_width,output_crop_height)).copyTo(crop_im);
-        imwrite(dir_image_filename[*iter], crop_im);
+        //imwrite(dir_image_filename[*iter], crop_im);
         resize(crop_im, output_im, output_im.size(), 0, 0, INTER_LINEAR);
-        imwrite(dir_image_filename[*iter], output_im);
-        resized_set.insert(*iter);
+        //cout<<"test"<<endl;
+        stringstream ss;
+        string name = dir_image_filename[*iter];
+        string type = ".jpg";
+    
+      //  ss<<folderName<<"/"<<name<<type;
+        ss << folderName << "/" << new_idx++ << type;
+        string fullPath = ss.str();
+        cout << "writing to " << fullPath << endl;
+        ss.str("");
+        imwrite(fullPath, output_im);
+
+        //resized_set.insert(*iter);
         
-        //imshow("crop", crop_im);
-        //imshow("output", output_im);
+        imshow("crop", crop_im);
+        imshow("output", output_im);
         iter_next = iter;
         iter_next++;
-
-
-        c = waitKey(5);
-    
+        
     }
-
+        //c = waitKey(5);
 }
+
+//--------------------------------------------------------------------------------------------------
+    void saveTrainingVert()
+    {
+  
+        set<int>::iterator iter, iter_next;
+        int i, j;
+        float factor;
+        int num_filtered_vert;
+        //num_filtered_vert = FilteredVert_idx_set.size();
+        //vector < vector <Point> > newVert;
+        FILE *fp = fopen("training.txt", "w");
+for (iter = FilteredVert_idx_set.begin(); iter != FilteredVert_idx_set.end(); iter = iter_next)
+{
+//num_saved_verts = 0
+                filtered_im = imread(dir_image_filename[*iter].c_str());
+                int x_left = filtered_im.cols / 2 - (output_crop_width/2);
+                current_im(cv::Rect(x_left,output_crop_top_y,output_crop_width,output_crop_height)).copyTo(crop_im);
+
+for (i = 0 , num_saved_verts = 0; i <Vert[*iter].size(); i++) {
+            if (Vert[*iter].size() == REQUIRED_NUMBER_OF_VERTS_PER_IMAGE) {
+                fprintf(fp, "%i: ", i);
+
+                for (j = 0; j < Vert[i].size() - 1; j++)
+                
+                factor = (output_im.cols/crop_im.cols);
+                cout<<"test vert"<<endl;
+                //float r = float roundf(factor);
+                int newx = ((Vert[i][j].x - x_left) * roundf(factor));
+                int newy = ((Vert[i][j].y - output_crop_top_y) * roundf(factor));
+ 
+                 //float fx = (Vert[i][j].x - x_left) * factor;
+                 //newVert[i][j].x = (int) fx;
+                 //float fy = (Vert[i][j].y - output_crop_top_y) * factor;
+                 //newVert[i][j].y = (int) fy;
+                //cout<<"test"<<endl;
+                fprintf(fp, "(%i, %i), ", newx,newy);
+                fprintf(fp, "(%i, %i)\n", newx,newy);
+                fflush(fp);
+                //num_saved_verts++;
+            }
+            else if (Vert[*iter].size() > 0)
+            printf("improper number of vertices for image %i; not saving\n", i);
+        }
+}
+        printf("saved %i images with verts\n",num_saved_verts);
+        fclose(fp);
+    
+}
+        
+        
+    
+    
+    
+
+
+
+
+
 
 
 //----------------------------------------------------------------------------
@@ -468,9 +585,14 @@ void onKeyPress(char c)
 
   // filter out overly-similar images
 
-  else if (c == 'F') {
+  else if (c == 'f') {
 
     filter_out_overly_similar_images();
+    draw_training_images();
+    //cout << "test"<<endl;
+    saveTrainingVert();
+  
+    
 
   }
 
@@ -597,6 +719,7 @@ void onKeyPress(char c)
   else if (c == 's') {
     saveVert();
     saveBad();
+    saveTrainingVert();
   }
 }
 
@@ -625,6 +748,30 @@ void setChannel(Mat &mat, unsigned int channel, unsigned char value)
 }
 
 //----------------------------------------------------------------------------
+
+void draw_output_window()
+{
+   int c; 
+   Mat crop_im;
+   Mat output_im(output_height,output_width,CV_8UC3);
+
+   int x_left = current_im.cols / 2 - (output_crop_width/2);
+   current_im(cv::Rect(x_left,output_crop_top_y,output_crop_width,output_crop_height)).copyTo(crop_im);
+
+/*int output_crop_top_y = 25;
+int output_crop_height = 225;   // 150
+int output_crop_width = 450;  // 375
+
+int output_width = 150;
+int output_height = 75;*/
+
+   resize(crop_im, output_im, output_im.size(), 0, 0, INTER_LINEAR);
+
+   imshow("crop", crop_im);
+   imshow("output", output_im);
+
+    c = waitKey(5);
+}
 
 // draw strings and shapes on top of current image
 
@@ -1045,6 +1192,8 @@ int loadVert()
   return num_verts;
 }
 
+
+
 //----------------------------------------------------------------------------
 
 int main( int argc, const char** argv )
@@ -1108,6 +1257,10 @@ int main( int argc, const char** argv )
     // show image 
 
     draw_overlay();
+    //draw_output_window();
+    //draw_training_images();
+
+
     imshow("trailGT", draw_im);
     if (!callbacks_set) {
       setMouseCallback("trailGT", onMouse);
