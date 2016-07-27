@@ -1,6 +1,9 @@
 import tensorflow as tf
 import numpy as np
 import input_data
+from PIL import Image
+import glob
+
 
 batch_size = 128
 test_size = 256
@@ -34,7 +37,11 @@ def model(X, w, w2, w3, w4, w_o, p_keep_conv, p_keep_hidden):
 
     pyx = tf.matmul(l4, w_o)
     return pyx
-
+    
+image_list=[]
+for filename in glob.glob('/home/cer/Documents/data/train/*.jpg'):
+    im=Image.open(filename)
+    image_list.append(im)
 mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
 trX, trY, teX, teY = mnist.train.images, mnist.train.labels, mnist.test.images, mnist.test.labels
 trX = trX.reshape(-1, 28, 28, 1)  # 28x28x1 input img
